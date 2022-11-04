@@ -141,7 +141,6 @@ int main(int, char**)
     ImGuiPluginUI win(app);
     win.show();
     app.exec();
-    printf("Hey?\n");
     return 0;
 }
 #endif
