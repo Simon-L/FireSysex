@@ -1,7 +1,8 @@
 /*
- * ImGui plugin example
+ * SysEx test program
  * Copyright (C) 2021 Jean Pierre Cimalando <jp-dev@inbox.ru>
  * Copyright (C) 2021-2022 Filipe Coelho <falktx@falktx.com>
+ * 2022 Simon-L
  * SPDX-License-Identifier: ISC
  */
 
@@ -10,7 +11,7 @@
    This is used to identify your plugin before a Plugin instance can be created.
    @note This macro is required.
  */
-#define DISTRHO_PLUGIN_NAME "ImGuiSimpleGain"
+#define DISTRHO_PLUGIN_NAME "FireSysex"
 
 /**
    Number of audio inputs the plugin has.
@@ -28,7 +29,7 @@
    The plugin URI when exporting in LV2 format.
    @note This macro is required.
  */
-#define DISTRHO_PLUGIN_URI "urn:distrho:examples:imguisimplegain"
+#define DISTRHO_PLUGIN_URI "urn:simonl:firesysex"
 
 /**
    Whether the plugin has a custom %UI.
@@ -74,7 +75,7 @@
    Whether the plugin wants MIDI output.
    @see Plugin::writeMidiEvent(const MidiEvent&)
  */
-#define DISTRHO_PLUGIN_WANT_MIDI_OUTPUT 0
+#define DISTRHO_PLUGIN_WANT_MIDI_OUTPUT 1
 
 /**
    Whether the plugin wants to change its own parameter inputs.@n
@@ -96,7 +97,7 @@
    @see Plugin::initState(uint32_t, String&, String&)
    @see Plugin::setState(const char*, const char*)
  */
-#define DISTRHO_PLUGIN_WANT_STATE 0
+#define DISTRHO_PLUGIN_WANT_STATE 1
 
 /**
    Whether the plugin implements the full state API.
@@ -156,7 +157,7 @@
 
    When this macro is defined, the companion DISTRHO_UI_DEFAULT_WIDTH macro must be defined as well.
  */
-#define DISTRHO_UI_DEFAULT_HEIGHT 400
+#define DISTRHO_UI_DEFAULT_HEIGHT 690
 
 /**
    Whether the %UI uses NanoVG for drawing instead of the default raw OpenGL calls.@n
@@ -223,7 +224,7 @@
 
    See http://lv2plug.in/ns/lv2core for more information.
  */
-#define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:AmplifierPlugin"
+#define DISTRHO_PLUGIN_LV2_CATEGORY "lv2:UtilityPlugin"
 
 /**
    Custom VST3 categories for the plugin.@n
@@ -267,7 +268,7 @@
       - Mono
       - Stereo
  */
-#define DISTRHO_PLUGIN_VST3_CATEGORIES "Fx|Dynamics|Stereo"
+#define DISTRHO_PLUGIN_VST3_CATEGORIES "Fx|Tools"
 
 /**
    Custom CLAP features for the plugin.@n
@@ -325,10 +326,10 @@
       - surround
       - ambisonic
 */
-#define DISTRHO_PLUGIN_CLAP_FEATURES "audio-effect", "stereo"
+#define DISTRHO_PLUGIN_CLAP_FEATURES "utility", "stereo"
 
 /**
    The plugin id when exporting in CLAP format, in reverse URI form.
    @note This macro is required when building CLAP plugins
 */
-#define DISTRHO_PLUGIN_CLAP_ID "studio.kx.distrho.examples.imguisimplegain"
+#define DISTRHO_PLUGIN_CLAP_ID "simonl.firesysex"

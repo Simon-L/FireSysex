@@ -1,3 +1,3 @@
-# DPF + ImGui template plugin project
+# Testing SysEx in DPF with Akai Fire
 
-This repository contains an example audio plugin project using DPF and ImGui.
+:warning: Only Jack build is enabled! Check `CMakeLists.txt` to change!

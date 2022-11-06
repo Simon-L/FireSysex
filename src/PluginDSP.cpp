@@ -1,226 +1,237 @@
-/*
- * ImGui plugin example
- * Copyright (C) 2021 Jean Pierre Cimalando <jp-dev@inbox.ru>
- * Copyright (C) 2021-2022 Filipe Coelho <falktx@falktx.com>
- * SPDX-License-Identifier: ISC
- */
+ // * Copyright (C) 2021 Jean Pierre Cimalando <jp-dev@inbox.ru>
+ // * Copyright (C) 2021-2022 Filipe Coelho <falktx@falktx.com>
+// 2022 Simon-L
 
 #include "DistrhoPlugin.hpp"
-#include "CParamSmooth.hpp"
+#include "sysex.h"
 
 #include <memory>
-
-// --------------------------------------------------------------------------------------------------------------------
-
-#ifndef MIN
-#define MIN(a,b) ( (a) < (b) ? (a) : (b) )
-#endif
-
-#ifndef MAX
-#define MAX(a,b) ( (a) > (b) ? (a) : (b) )
-#endif
-
-#ifndef CLAMP
-#define CLAMP(v, min, max) (MIN((max), MAX((min), (v))))
-#endif
-
-#ifndef DB_CO
-#define DB_CO(g) ((g) > -90.0f ? powf(10.0f, (g) * 0.05f) : 0.0f)
-#endif
+#include <vector>
 
 START_NAMESPACE_DISTRHO
-
-// --------------------------------------------------------------------------------------------------------------------
 
 class ImGuiPluginDSP : public Plugin
 {
     enum Parameters {
-        kParamGain = 0,
         kParamCount
     };
 
     double fSampleRate = getSampleRate();
-    float fGainDB = 0.0f;
-    float fGainLinear = 1.0f;
-    std::unique_ptr<CParamSmooth> fSmoothGain = std::make_unique<CParamSmooth>(20.0f, fSampleRate);
+    float fTime = 0.0f;
+
+    bool bGoPads = false;
+    bool bGoScreen = false;
+
+    MidiEvent midiPads;
+    std::vector<uint8_t> sysexPads;
+
+    MidiEvent midiScreen;
+    std::vector<uint8_t> sysexScreen;
+    bool screenHello = false;
+    bool screenChecker = false;
+    bool screenClear = false;
+    char screenText[14] = "\0";
+
+    float flastSend = 0.0f;
+
+    char padColor[3] = {0, 0, 0};
+
+    MidiEvent initMidi;
+    bool initMidiDone = false;
+
+    MidiEvent padZeroMidi;
+    bool padZeroBlue = false;
+    bool padZeroOff = false;
 
 public:
-   /**
-      Plugin class constructor.@n
-      You must set all parameter values to their defaults, matching ParameterRanges::def.
-    */
     ImGuiPluginDSP()
         : Plugin(kParamCount, 0, 0) // parameters, programs, states
     {
+        sysexPads.reserve(2048);
+        sysexScreen.reserve(2048);
+
+        initMidi.frame = 0;
+        initMidi.size = 3;
+        initMidi.data[0] = 0xb0;
+        initMidi.data[1] = 127;
+        initMidi.data[2] = 0;
+
+        padZeroMidi.frame = 0;
+        padZeroMidi.size = 12;
+        padZeroMidi.dataExt = padZeroSysex;
     }
 
 protected:
-    // ----------------------------------------------------------------------------------------------------------------
-    // Information
-
-   /**
-      Get the plugin label.@n
-      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
-    */
     const char* getLabel() const noexcept override
     {
-        return "SimpleGain";
+        return "SysexTest";
     }
 
-   /**
-      Get an extensive comment/description about the plugin.@n
-      Optional, returns nothing by default.
-    */
     const char* getDescription() const override
     {
-        return "A simple audio volume gain plugin with ImGui for its GUI";
+        return "A simple plugin to test SysEx";
     }
 
-   /**
-      Get the plugin author/maker.
-    */
     const char* getMaker() const noexcept override
     {
-        return "Jean Pierre Cimalando, falkTX";
+        return "Jean Pierre Cimalando, falkTX, Simon-L";
     }
 
-   /**
-      Get the plugin license (a single line of text or a URL).@n
-      For commercial plugins this should return some short copyright information.
-    */
     const char* getLicense() const noexcept override
     {
         return "ISC";
     }
 
-   /**
-      Get the plugin version, in hexadecimal.
-      @see d_version()
-    */
+    void setState(const char* key, const char* value) override
+    {
+        if (std::strcmp(key, "color") == 0) {
+            if (fTime - flastSend >= 0.05) {
+                mkSysexPads(value);
+
+                bGoPads = true;
+                flastSend = fTime;
+            }
+        }
+        if (std::strcmp(key, "init") == 0) {
+            initMidiDone = false;
+        }
+        if (std::strcmp(key, "on") == 0) padZeroBlue = true;
+        if (std::strcmp(key, "off") == 0) padZeroOff = true;
+        if (std::strcmp(key, "hello") == 0) screenHello = true;
+        if (std::strcmp(key, "checker") == 0) screenChecker = true;
+        if (std::strcmp(key, "clear") == 0) screenClear = true;
+        if (std::strcmp(key, "text") == 0) std::strcpy(screenText, value);
+    }
+
+    void stateChanged(const char* key, const char* value) {}
+
     uint32_t getVersion() const noexcept override
     {
         return d_version(1, 0, 0);
     }
 
-   /**
-      Get the plugin unique Id.@n
-      This value is used by LADSPA, DSSI and VST plugin formats.
-      @see d_cconst()
-    */
     int64_t getUniqueId() const noexcept override
     {
-        return d_cconst('d', 'I', 'm', 'G');
+        return d_cconst('a', 'k', 'f', 'i');
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Init
-
-   /**
-      Initialize the parameter @a index.@n
-      This function will be called once, shortly after the plugin is created.
-    */
     void initParameter(uint32_t index, Parameter& parameter) override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
-
-        parameter.ranges.min = -90.0f;
-        parameter.ranges.max = 30.0f;
-        parameter.ranges.def = -0.0f;
-        parameter.hints = kParameterIsAutomatable;
-        parameter.name = "Gain";
-        parameter.shortName = "Gain";
-        parameter.symbol = "gain";
-        parameter.unit = "dB";
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Internal data
-
-   /**
-      Get the current value of a parameter.@n
-      The host may call this function from any context, including realtime processing.
-    */
     float getParameterValue(uint32_t index) const override
     {
         DISTRHO_SAFE_ASSERT_RETURN(index == 0, 0.0f);
 
-        return fGainDB;
+        return 0.0;
     }
 
-   /**
-      Change a parameter value.@n
-      The host may call this function from any context, including realtime processing.@n
-      When a parameter is marked as automatable, you must ensure no non-realtime operations are performed.
-      @note This function will only be called for parameter inputs.
-    */
     void setParameterValue(uint32_t index, float value) override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
-
-        fGainDB = value;
-        fGainLinear = DB_CO(CLAMP(value, -90.0, 30.0));
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Audio/MIDI Processing
-
-   /**
-      Activate this plugin.
-    */
-    void activate() override
-    {
-        fSmoothGain->flush();
+    void mkSysexScreen(uint8_t* source) {
+        sysexScreen.clear();
+        sysexScreen.insert(sysexScreen.begin(), sysexIntro, sysexIntro+sizeof(sysexIntro));
+        sysexScreen.at(4) = 0x0E; // WRITE OLED command
+        // trim the data sent to work around 1024 bytes limitation
+        sysexScreen.insert(sysexScreen.end(), source, source+1016);
+        sysexScreen.at(5) = (sysexScreen.size() - 7) >> 7;
+        sysexScreen.at(6) = (sysexScreen.size() - 7) & 0x7F;
+        sysexScreen.push_back(0xF7);
+        printf("Size: %d\n", sysexScreen.size());
+        midiScreen.frame = 0;
+        midiScreen.size = sysexScreen.size();
+        midiScreen.dataExt = sysexScreen.data();
     }
 
-   /**
-      Run/process function for plugins without MIDI input.
-      @note Some parameters might be null if there are no audio inputs or outputs.
-    */
-    void run(const float** inputs, float** outputs, uint32_t frames) override
-    {
-        // get the left and right audio inputs
-        const float* const inpL = inputs[0];
-        const float* const inpR = inputs[1];
-
-        // get the left and right audio outputs
-        float* const outL = outputs[0];
-        float* const outR = outputs[1];
-
-        // apply gain against all samples
-        for (uint32_t i=0; i < frames; ++i)
+    void mkSysexPads(const char col[3]) {
+        sysexPads.clear();
+        sysexPads.insert(sysexPads.end(), sysexIntro, sysexIntro + sizeof(sysexIntro));
+        for (int i = 0x0; i <= 0x3F; ++i)
         {
-            const float gain = fSmoothGain->process(fGainLinear);
-            outL[i] = inpL[i] * gain;
-            outR[i] = inpR[i] * gain;
+            sysexPads.insert(sysexPads.end(), {i, col[0], col[1], col[2]});
+        }
+        int payload = sysexPads.size() - sizeof(sysexIntro);
+        sysexPads.push_back(0xF7);
+        sysexPads[5] = payload >> 7;
+        sysexPads[6] = payload & 0x7F;
+        midiPads.frame = 0;
+        midiPads.size = sysexPads.size();
+        midiPads.dataExt = sysexPads.data();
+    }
+
+
+    void activate() override
+    {   
+        const char s[3]{0,0,0};
+        mkSysexPads(s);
+    }
+
+    void run(const float** inputs, float** outputs, uint32_t frames) override
+    {   
+        fTime += frames * (1.0/getSampleRate());
+
+        if (!initMidiDone) {
+            writeMidiEvent(initMidi);
+            initMidiDone = true;
+        }
+        if (padZeroBlue) {
+            padZeroSysex[10] = 0x7F;
+            writeMidiEvent(padZeroMidi);
+            padZeroBlue = false;
+        }
+        if (padZeroOff) {
+            padZeroSysex[10] = 0x00;
+            writeMidiEvent(padZeroMidi);
+            padZeroOff = false;
+        }
+        if (screenClear) {
+            clearScreen();
+            mkSysexScreen(OLEDBitmap);
+            writeMidiEvent(midiScreen);
+            screenClear = false;
+        }
+        if (screenHello) {
+            clearScreen();
+            drawString("Hello", 5, 40, 15);
+            drawString("world!", 6, 40, 32);
+            mkSysexScreen(OLEDBitmap);
+            writeMidiEvent(midiScreen);
+            screenHello = false;
+        }
+        if (std::strcmp(screenText, "\0") != 0) {
+            clearScreen();
+            drawString(screenText, 14, 5, 24);
+            mkSysexScreen(OLEDBitmap);
+            writeMidiEvent(midiScreen);
+            screenText[0] = '\0';
+        }
+        if (screenChecker) {
+            clearScreen();
+            mkSysexScreen(checker);
+            writeMidiEvent(midiScreen);
+            screenChecker = false;            
+        }
+
+        if (bGoPads) {
+            printf("Sending new color array: %u %u %u\n", sysexPads[8], sysexPads[9], sysexPads[10]);
+            bGoPads = false;
+            writeMidiEvent(midiPads);
         }
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Callbacks (optional)
-
-   /**
-      Optional callback to inform the plugin about a sample rate change.@n
-      This function will only be called when the plugin is deactivated.
-      @see getSampleRate()
-    */
     void sampleRateChanged(double newSampleRate) override
     {
         fSampleRate = newSampleRate;
-        fSmoothGain->setSampleRate(newSampleRate);
     }
-
-    // ----------------------------------------------------------------------------------------------------------------
 
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginDSP)
 };
-
-// --------------------------------------------------------------------------------------------------------------------
 
 Plugin* createPlugin()
 {
     return new ImGuiPluginDSP();
 }
-
-// --------------------------------------------------------------------------------------------------------------------
 
 END_NAMESPACE_DISTRHO

@@ -1,0 +1,6 @@
+FireSysex:midi-out
+    FL-STUDIO-FIRE:midi/capture_1
+
+FireSysex:midi-out
+    MIDI monitor:midi_in
+

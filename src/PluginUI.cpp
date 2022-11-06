@@ -1,62 +1,38 @@
-/*
- * ImGui plugin example
- * Copyright (C) 2021 Jean Pierre Cimalando <jp-dev@inbox.ru>
- * Copyright (C) 2021-2022 Filipe Coelho <falktx@falktx.com>
- * SPDX-License-Identifier: ISC
- */
-
+ // * Copyright (C) 2021 Jean Pierre Cimalando <jp-dev@inbox.ru>
+ // * Copyright (C) 2021-2022 Filipe Coelho <falktx@falktx.com>
+ // 2022 Simon-L
 #include "DistrhoUI.hpp"
 #include "ResizeHandle.hpp"
+#include <algorithm>
 
 START_NAMESPACE_DISTRHO
 
-// --------------------------------------------------------------------------------------------------------------------
-
 class ImGuiPluginUI : public UI
 {
-    float fGain = 0.0f;
     ResizeHandle fResizeHandle;
 
-    // ----------------------------------------------------------------------------------------------------------------
+    ImVec4 color = ImVec4(0.5f, 0.5f, 0.50f, 0.5f);
+    char buf[14] = "One Two Three";
 
 public:
-   /**
-      UI class constructor.
-      The UI should be initialized to a default state that matches the plugin side.
-    */
     ImGuiPluginUI()
         : UI(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT),
           fResizeHandle(this)
     {
         setGeometryConstraints(DISTRHO_UI_DEFAULT_WIDTH, DISTRHO_UI_DEFAULT_HEIGHT, true);
 
-        // hide handle if UI is resizable
         if (isResizable())
             fResizeHandle.hide();
     }
 
 protected:
-    // ----------------------------------------------------------------------------------------------------------------
-    // DSP/Plugin Callbacks
-
-   /**
-      A parameter has changed on the plugin side.@n
-      This is called by the host to inform the UI about parameter changes.
-    */
     void parameterChanged(uint32_t index, float value) override
     {
-        DISTRHO_SAFE_ASSERT_RETURN(index == 0,);
-
-        fGain = value;
         repaint();
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Widget Callbacks
+    void stateChanged(const char* key, const char* value) {}
 
-   /**
-      ImGui specific onDisplay function.
-    */
     void onImGuiDisplay() override
     {
         const float width = getWidth();
@@ -66,23 +42,26 @@ protected:
         ImGui::SetNextWindowPos(ImVec2(margin, margin));
         ImGui::SetNextWindowSize(ImVec2(width - 2 * margin, height - 2 * margin));
 
-        if (ImGui::Begin("Simple gain", nullptr, ImGuiWindowFlags_NoResize))
+        if (ImGui::Begin("AKAI Fire SysEx test", nullptr, ImGuiWindowFlags_NoResize))
         {
-            static char aboutText[256] = "This is a demo plugin made with ImGui.\n";
-            ImGui::InputTextMultiline("About", aboutText, sizeof(aboutText));
-
-            if (ImGui::SliderFloat("Gain (dB)", &fGain, -90.0f, 30.0f))
-            {
-                if (ImGui::IsItemActivated())
-                    editParameter(0, true);
-
-                setParameterValue(0, fGain);
+            if (ImGui::Button("Turn off all LEDs")) setState("init", "\0");
+            ImGui::Separator();
+            if (ImGui::Button("Turn pad 0 blue")) setState("on", "\0");
+            if (ImGui::Button("Turn pad 0 off")) setState("off", "\0");
+            ImGui::Separator();
+            if (ImGui::ColorPicker3("Pads color", (float*)&color)) {
+                char stR = std::floor(color.x * 127);
+                char stG = std::floor(color.y * 127);
+                char stB = std::floor(color.z * 127);
+                const char col[4] = {stR, stG, stB, '\0'};
+                setState("color", col);
             }
-
-            if (ImGui::IsItemDeactivated())
-            {
-                editParameter(0, false);
-            }
+            ImGui::Separator();
+            ImGui::InputText("Screen text", buf, 14);
+            if (ImGui::Button("Display text")) setState("text", buf);
+            if (ImGui::Button("Display hello world on screen")) setState("hello", "\0");
+            if (ImGui::Button("Display checker on screen")) setState("checker", "\0");
+            if (ImGui::Button("Clear screen")) setState("clear", "\0");
         }
         ImGui::End();
     }
@@ -90,13 +69,9 @@ protected:
     DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(ImGuiPluginUI)
 };
 
-// --------------------------------------------------------------------------------------------------------------------
-
 UI* createUI()
 {
     return new ImGuiPluginUI();
 }
-
-// --------------------------------------------------------------------------------------------------------------------
 
 END_NAMESPACE_DISTRHO
